@@ -99,18 +99,47 @@ def _set_layout(n):
     )
 
 
+def _split_by_lang(text):
+    chunks = []
+    cur = ""
+    cur_ru = None
+    neutral = ""
+    for ch in text:
+        is_cyr = ch in RU2EN
+        is_lat = ch.isascii() and ch.isalpha()
+        if not is_cyr and not is_lat:
+            neutral += ch
+            continue
+        need_ru = is_cyr
+        if cur_ru is not None and need_ru != cur_ru:
+            cur += neutral
+            chunks.append((cur, cur_ru))
+            cur = ""
+            neutral = ""
+        else:
+            cur += neutral
+            neutral = ""
+        cur_ru = need_ru
+        cur += ch
+    cur += neutral
+    if cur:
+        chunks.append((cur, cur_ru if cur_ru is not None else False))
+    return chunks
+
+
 def type_text(text, with_enter=False):
     saved = _get_layout()
-    has_cyrillic = any(ch in RU2EN for ch in text)
-    if has_cyrillic:
-        mapped = "".join(RU2EN.get(ch, ch) for ch in text)
-        _set_layout(1)
-    else:
-        mapped = text
-        _set_layout(0)
-    time.sleep(0.1)
     env = _ydotool_env()
-    subprocess.run(["ydotool", "type", "--", mapped], env=env, check=False, capture_output=True)
+    chunks = _split_by_lang(text)
+    for chunk, is_ru in chunks:
+        if is_ru:
+            mapped = "".join(RU2EN.get(ch, ch) for ch in chunk)
+            _set_layout(1)
+        else:
+            mapped = chunk
+            _set_layout(0)
+        time.sleep(0.05)
+        subprocess.run(["ydotool", "type", "--", mapped], env=env, check=False, capture_output=True)
     if with_enter:
         time.sleep(0.05)
         subprocess.run(["ydotool", "key", "28:1", "28:0"], env=env, check=False, capture_output=True)
