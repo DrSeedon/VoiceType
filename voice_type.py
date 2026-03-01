@@ -10,7 +10,7 @@ import pyaudio
 import speech_recognition as sr
 from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction, QWidget
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QBrush, QPen
-from PyQt5.QtCore import pyqtSignal, QObject, QSize
+from PyQt5.QtCore import pyqtSignal, QObject, QSize, QTimer
 import evdev
 from evdev import ecodes
 
@@ -300,6 +300,7 @@ class VoiceType:
     def _on_insert(self, text, with_enter):
         self.signals.set_state.emit("done")
         type_text(text, with_enter)
+        QTimer.singleShot(1500, lambda: self.signals.set_state.emit("ready"))
 
     def quit(self):
         self.pa.terminate()

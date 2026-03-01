@@ -66,12 +66,12 @@ The app starts in the system tray.
 
 ### Tray icon colors
 
-| Color | Status |
-|-------|--------|
-| Green | Ready |
-| Red | Recording |
-| Yellow | Processing (sending to Google) |
-| Blue | Text inserted |
+| Icon | Status |
+|------|--------|
+| 🟢 | Ready |
+| 🔴 | Recording |
+| 🟡 | Processing (sending to Google) |
+| 🔵 | Text inserted (returns to 🟢 after 1.5s) |
 
 ## Autostart
 
