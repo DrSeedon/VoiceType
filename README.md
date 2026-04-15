@@ -12,12 +12,12 @@ Typing text by voice on Linux Wayland is painful:
 
 ## The Solution
 
-VoiceType records audio via hotkey, sends it to Google Speech Recognition (free, no API key needed), and types the result into the focused window using `ydotool type` with automatic keyboard layout switching via KDE DBus.
+VoiceType records audio via hotkey, sends it to **Deepgram Nova-2** (fast, accurate STT), and types the result into the focused window using `ydotool type` with automatic keyboard layout switching via KDE DBus.
 
 **Key features:**
 - Works on **KDE Plasma Wayland** (tested on Plasma 6.4+)
+- **Deepgram Nova-2** — ~100x realtime speed, high accuracy for Russian
 - **Mixed language support** — automatically switches keyboard layout per word chunk (e.g. "Привет hello мир" types correctly)
-- **Free** — uses Google Web Speech API, no API keys required
 - System tray icon with color-coded status
 - Hotkey-driven: F7 to start/stop, F8 to stop + Enter
 
@@ -26,7 +26,8 @@ VoiceType records audio via hotkey, sends it to Google Speech Recognition (free,
 - Linux with KDE Plasma (Wayland session)
 - Python 3.7+
 - Microphone
-- Internet connection (for Google Speech API)
+- Internet connection (for Deepgram API)
+- Deepgram API key (free tier: 45,000 minutes)
 
 ### System packages
 
@@ -51,6 +52,17 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Configuration
+
+Create a `.env` file with your Deepgram API key:
+
+```bash
+cp .env.example .env
+# Edit .env and add your key
+```
+
+Get a free API key at https://console.deepgram.com (45,000 minutes free).
+
 ## Usage
 
 ```bash
@@ -66,50 +78,24 @@ The app starts in the system tray.
 
 ### Tray icon colors
 
-| Icon | Status |
-|------|--------|
-| 🟢 | Ready |
-| 🔴 | Recording |
-| 🟡 | Processing (sending to Google) |
-| 🔵 | Text inserted (returns to 🟢 after 1.5s) |
-
-## Autostart
-
-Copy the desktop file to autostart:
-
-```bash
-cp voicetype.desktop ~/.config/autostart/
-```
-
-Or create it manually:
-
-```ini
-[Desktop Entry]
-Type=Application
-Name=VoiceType
-Exec=/path/to/VoiceType/run.sh
-Terminal=false
-```
+- 🟢 Ready
+- 🔴 Recording
+- 🟡 Processing (sending to Deepgram)
+- 🔵 Text inserted (returns to 🟢 after 1.5s)
 
 ## How it works
 
 1. Listens for F7/F8 via `evdev` (reads `/dev/input` devices directly)
 2. Records audio using PyAudio (44100 Hz, mono)
-3. Sends WAV to Google Web Speech API (`speech_recognition` library)
+3. Sends WAV to Deepgram Nova-2 API (HTTP POST, ~100x realtime)
 4. Splits recognized text into language chunks (Cyrillic vs Latin)
 5. For each chunk: switches KDE keyboard layout via DBus, types via `ydotool type`
 6. Restores original keyboard layout
 
-## Logs
+## Autostart
 
 ```bash
-tail -f /path/to/VoiceType/voicetype.log
-```
-
-## Stop
-
-```bash
-pkill -f voice_type.py
+cp voicetype.desktop ~/.config/autostart/
 ```
 
 ## License

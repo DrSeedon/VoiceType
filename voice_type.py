@@ -6,13 +6,23 @@ import io
 import time
 import wave
 import shutil
+import json
+import urllib.request
+import urllib.error
 import pyaudio
-import speech_recognition as sr
+from dotenv import load_dotenv
 from PyQt5.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QAction, QWidget
 from PyQt5.QtGui import QIcon, QPixmap, QPainter, QColor, QBrush, QPen
 from PyQt5.QtCore import pyqtSignal, QObject, QSize, QTimer
-import evdev
-from evdev import ecodes
+try:
+    import evdev
+    from evdev import ecodes
+except ImportError:
+    evdev = None
+    ecodes = None
+
+load_dotenv()
+DEEPGRAM_API_KEY = os.getenv("DEEPGRAM_API_KEY", "")
 
 COLORS = {
     "ready": "#4CAF50",
@@ -170,7 +180,6 @@ class VoiceType:
         self.signals.set_state.connect(self._on_state)
         self.signals.insert_text.connect(self._on_insert)
 
-        self.recognizer = sr.Recognizer()
         self.pa = pyaudio.PyAudio()
         self.recording = False
         self.mic_thread = None
@@ -266,26 +275,29 @@ class VoiceType:
                 wf.setsampwidth(self.pa.get_sample_size(FORMAT))
                 wf.setframerate(RATE)
                 wf.writeframes(b"".join(frames))
-            buf.seek(0)
-            with sr.AudioFile(buf) as source:
-                audio = self.recognizer.record(source)
-            text = self.recognizer.recognize_google(audio, language="ru-RU")
+            audio_data = buf.getvalue()
+            text = self._deepgram_transcribe(audio_data)
             if text:
                 print(f">> Текст: {text}")
                 self.signals.insert_text.emit(text, self.pending_enter)
             else:
+                print(">> Не удалось распознать")
+                self.tray.showMessage("VoiceType", "Не удалось распознать речь", QSystemTrayIcon.Warning, 2000)
                 self.signals.set_state.emit("ready")
-        except sr.UnknownValueError:
-            print(">> Не удалось распознать")
-            self.tray.showMessage("VoiceType", "Не удалось распознать речь", QSystemTrayIcon.Warning, 2000)
-            self.signals.set_state.emit("ready")
-        except sr.RequestError as e:
-            print(f">> Ошибка Google: {e}")
-            self.tray.showMessage("VoiceType", f"Ошибка Google: {e}", QSystemTrayIcon.Critical, 3000)
-            self.signals.set_state.emit("ready")
         except Exception as e:
             print(f">> Ошибка: {e}")
+            self.tray.showMessage("VoiceType", f"Ошибка STT: {e}", QSystemTrayIcon.Critical, 3000)
             self.signals.set_state.emit("ready")
+
+    def _deepgram_transcribe(self, audio_data: bytes) -> str:
+        url = "https://api.deepgram.com/v1/listen?model=nova-2&language=ru&smart_format=true"
+        req = urllib.request.Request(url, data=audio_data, method="POST")
+        req.add_header("Authorization", f"Token {DEEPGRAM_API_KEY}")
+        req.add_header("Content-Type", "audio/wav")
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            result = json.loads(resp.read().decode())
+        transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
+        return transcript.strip()
 
     def _on_state(self, state):
         self.tray.setIcon(self.icons.get(state, self.icons["ready"]))
