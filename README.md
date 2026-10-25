@@ -12,14 +12,16 @@ Typing text by voice on Linux Wayland is painful:
 
 ## The Solution
 
-VoiceType records audio via hotkey, sends it to **Deepgram Nova-2** (fast, accurate STT), and types the result into the focused window using `ydotool type` with automatic keyboard layout switching via KDE DBus.
+VoiceType records audio via hotkey, cleans it with `ffmpeg`, sends it to **Deepgram Nova-3** (fast, accurate STT), and pastes the result into the focused window via the clipboard (`wl-copy` + Ctrl+V), so it works under any keyboard layout.
 
 **Key features:**
 - Works on **KDE Plasma Wayland** (tested on Plasma 6.4+)
-- **Deepgram Nova-2** — ~100x realtime speed, high accuracy for Russian
-- **Mixed language support** — automatically switches keyboard layout per word chunk (e.g. "Привет hello мир" types correctly)
+- **Deepgram Nova-3** — fast, high accuracy for Russian (`language=ru`)
+- **Audio cleanup** — de-clip, high-pass and loudness normalization before upload
+- **Self-tuning mic gain** — lowers the mic volume after clipped takes, raises it when too quiet; tray menu has a manual calibration
+- **Speakers** — when several voices are detected the text is labelled `Спикер N:`; words Deepgram is unsure about get `(?)`
 - System tray icon with color-coded status
-- Hotkey-driven: F7 to start/stop, F8 to stop + Enter
+- Click the tray icon to start, click again to stop + Enter; hotkeys: F7 to start/stop, F8 to stop + Enter
 
 ## Requirements
 
@@ -32,7 +34,7 @@ VoiceType records audio via hotkey, sends it to **Deepgram Nova-2** (fast, accur
 ### System packages
 
 ```bash
-sudo apt install ydotool wl-clipboard
+sudo apt install ydotool wl-clipboard ffmpeg
 ```
 
 ### Input device access
@@ -73,6 +75,7 @@ The app starts in the system tray.
 
 | Hotkey | Action |
 |--------|--------|
+| **Tray click** | Start / stop recording → paste text + Enter |
 | **F7** | Start/stop recording → paste text |
 | **F8** | Stop recording → paste text + Enter |
 
@@ -87,10 +90,13 @@ The app starts in the system tray.
 
 1. Listens for F7/F8 via `evdev` (reads `/dev/input` devices directly)
 2. Records audio using PyAudio (44100 Hz, mono)
-3. Sends WAV to Deepgram Nova-2 API (HTTP POST, ~100x realtime)
-4. Splits recognized text into language chunks (Cyrillic vs Latin)
-5. For each chunk: switches KDE keyboard layout via DBus, types via `ydotool type`
-6. Restores original keyboard layout
+3. Cleans it with `ffmpeg` (`adeclip`, high-pass, `loudnorm`) and downsamples to 16 kHz FLAC
+4. Sends it to Deepgram Nova-3 (diarization on) and builds the text, marking low-confidence words with `(?)`
+5. Puts the text on the clipboard, presses Ctrl+V (and Enter), then restores the previous clipboard
+
+### Microphone
+
+Gain control targets the physical mic set in `HW_MIC` (`voice_type.py`; list yours with `pactl list short sources`). For Telegram-like noise suppression and AGC, a PipeWire WebRTC `echo-cancel` virtual source can be set as the default mic — the app records from whatever the default source is.
 
 ## Autostart
 
