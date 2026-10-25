@@ -92,7 +92,7 @@ The app starts in the system tray.
 2. Records audio using PyAudio (44100 Hz, mono)
 3. Cleans it with `ffmpeg` (`adeclip`, high-pass, `loudnorm`) and downsamples to 16 kHz FLAC
 4. Sends it to Deepgram Nova-3 (diarization on) and builds the text, marking low-confidence words with `(?)`
-5. Puts the text on the clipboard, presses Ctrl+V (and Enter), then restores the previous clipboard
+5. Puts the text on the clipboard, presses Ctrl+V (and Enter); the text stays on the clipboard
 
 ### Microphone
 

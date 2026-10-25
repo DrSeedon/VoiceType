@@ -87,18 +87,16 @@ def _ydotool_env():
 
 def paste_text(text, with_enter=False):
     # Clipboard + Ctrl+V instead of ydotool typing: instant, and independent of keyboard layout.
+    # The text deliberately stays on the clipboard: restoring the old one raced slow apps (they pasted stale content),
+    # and if Ctrl+V misses the window you can still paste by hand.
     # Ctrl+V goes by scancode (29 = Ctrl, 47 = V), so it works under the RU layout too.
     env = _ydotool_env()
-    prev = subprocess.run(["wl-paste", "-n", "--type", "text"], capture_output=True)
     subprocess.run(["wl-copy"], input=text.encode(), check=False)
-    time.sleep(0.05)
+    time.sleep(0.1)
     subprocess.run(["ydotool", "key", "29:1", "47:1", "47:0", "29:0"], env=env, check=False, capture_output=True)
     if with_enter:
         time.sleep(0.15)
         subprocess.run(["ydotool", "key", "28:1", "28:0"], env=env, check=False, capture_output=True)
-    time.sleep(0.3)
-    if prev.returncode == 0 and prev.stdout:
-        subprocess.run(["wl-copy"], input=prev.stdout, check=False)
 
 
 def adjust_mic_gain(pcm):
