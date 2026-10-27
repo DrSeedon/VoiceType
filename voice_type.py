@@ -121,10 +121,11 @@ def adjust_mic_gain(pcm):
         print(f">> Громкость микрофона {vol}% -> {new}% (клип {clipped:.2%}, p99 {p99})")
 
 
-# adeclip repairs clipped peaks; loudnorm evens out quiet/loud speakers. A/B-tested on a clipped
-# multi-speaker take: raw lost the opening phrase and punctuation, this variant got both back.
-CLEAN_FILTER = "adeclip,highpass=f=80,loudnorm=I=-18:TP=-2:LRA=11"
+# loudnorm evens out quiet/loud speakers. A/B-tested on a clipped multi-speaker take: raw lost the opening
+# phrase and punctuation, this got both back. adeclip added nothing on top but cost 16s of 24s on a 7-min take.
+CLEAN_FILTER = "highpass=f=80,loudnorm=I=-18:TP=-2:LRA=11"
 LOW_CONF = 0.5
+FAILED_DIR = os.path.expanduser("~/Documents/voicetype-saved")
 # Gain is tuned on the physical mic; the default source is now the WebRTC virtual one (~/.config/pipewire/pipewire.conf.d/50-voice-clean.conf)
 HW_MIC = "alsa_input.pci-0000_00_1f.3.analog-stereo"
 
@@ -132,13 +133,14 @@ HW_MIC = "alsa_input.pci-0000_00_1f.3.analog-stereo"
 def clean_audio(wav_bytes):
     r = subprocess.run(
         ["ffmpeg", "-v", "error", "-i", "pipe:0", "-af", CLEAN_FILTER,
-         "-ac", "1", "-ar", "16000", "-f", "flac", "pipe:1"],
+         "-ac", "1", "-ar", "16000", "-c:a", "libopus", "-b:a", "24k", "-application", "voip",
+         "-f", "ogg", "pipe:1"],
         input=wav_bytes, capture_output=True,
     )
     if r.returncode != 0 or not r.stdout:
         print(f">> ffmpeg не справился, шлю как есть: {r.stderr.decode()[:200]}")
         return wav_bytes, "audio/wav"
-    return r.stdout, "audio/flac"
+    return r.stdout, "audio/ogg"
 
 
 def ensure_ydotoold():
@@ -324,7 +326,11 @@ class VoiceType:
                 self.signals.notify.emit("Не удалось распознать речь", 2000)
                 self.signals.set_state.emit("ready")
         except Exception as e:
-            print(f">> Ошибка: {e}")
+            # Never lose a take: /tmp/voicetype_last.wav is overwritten by the next recording
+            os.makedirs(FAILED_DIR, exist_ok=True)
+            saved = os.path.join(FAILED_DIR, time.strftime("take_%Y-%m-%d_%H%M%S.wav"))
+            shutil.copy("/tmp/voicetype_last.wav", saved)
+            print(f">> Ошибка: {e}. Запись сохранена: {saved}")
             self.signals.notify.emit(f"Ошибка STT: {e}", 3000)
             self.signals.set_state.emit("ready")
 
@@ -334,7 +340,8 @@ class VoiceType:
         req = urllib.request.Request(url, data=audio_data, method="POST")
         req.add_header("Authorization", f"Token {DEEPGRAM_API_KEY}")
         req.add_header("Content-Type", content_type)
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        # Goes through HTTPS_PROXY (Contabo): measured 3.3s steady vs 3.8-12s jittery direct from RU
+        with urllib.request.urlopen(req, timeout=300) as resp:
             result = json.loads(resp.read().decode())
         words = result["results"]["channels"][0]["alternatives"][0]["words"]
         multi = len({w["speaker"] for w in words}) > 1
