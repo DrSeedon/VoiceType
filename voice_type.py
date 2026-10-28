@@ -341,8 +341,20 @@ class VoiceType:
         req.add_header("Authorization", f"Token {DEEPGRAM_API_KEY}")
         req.add_header("Content-Type", content_type)
         # Goes through HTTPS_PROXY (Contabo): measured 3.3s steady vs 3.8-12s jittery direct from RU
-        with urllib.request.urlopen(req, timeout=300) as resp:
-            result = json.loads(resp.read().decode())
+        # Short per-operation timeout + retries: a stalled upload must fail fast instead of freezing the tray for minutes
+        for attempt in range(3):
+            try:
+                with urllib.request.urlopen(req, timeout=60) as resp:
+                    result = json.loads(resp.read().decode())
+                break
+            except urllib.error.HTTPError as e:
+                if e.code < 500 or attempt == 2:
+                    raise
+            except (urllib.error.URLError, OSError) as e:
+                if attempt == 2:
+                    raise
+                print(f">> Deepgram попытка {attempt + 1}/3 не удалась: {e}")
+            time.sleep(1.5 * (attempt + 1))
         words = result["results"]["channels"][0]["alternatives"][0]["words"]
         multi = len({w["speaker"] for w in words}) > 1
         # One line only: a newline would be typed as Enter and send the message mid-sentence

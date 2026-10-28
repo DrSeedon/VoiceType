@@ -5,6 +5,8 @@ pkill -f "python.*voice_type.py" 2>/dev/null
 sleep 0.3
 
 source venv/bin/activate
+# Autostart runs before the session exports the AI gateway; without it Deepgram goes direct and stalls
+export HTTPS_PROXY="${HTTPS_PROXY:-http://127.0.0.1:12339}"
 export QT_PLUGIN_PATH="$(python -c 'import PyQt5, os; print(os.path.join(os.path.dirname(PyQt5.__file__), "Qt5", "plugins"))')"
 if [ -n "$WAYLAND_DISPLAY" ]; then
     export QT_QPA_PLATFORM=wayland
